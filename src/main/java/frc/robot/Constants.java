@@ -25,6 +25,8 @@ public final class Constants {
         public static class IntakeConstants {
             public static final int kIntakeMotorCanId = 0;
             public static final int kIntakeBeamBreakDio = 0;
+            public static final double kDebounceTime = 0.1;
+            public static final double kStallCurrentThreshold = 15.0;
         }
     }
 }

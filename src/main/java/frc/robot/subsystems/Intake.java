@@ -9,6 +9,8 @@ import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.NeutralModeValue;
 
+import edu.wpi.first.math.filter.Debouncer;
+import edu.wpi.first.math.filter.Debouncer.DebounceType;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
 import edu.wpi.first.math.util.Units;
@@ -30,6 +32,10 @@ public class Intake extends SubsystemBase {
     private final DutyCycleOut m_dutyCycleOutRequest = new DutyCycleOut(0.0);
     private final VoltageOut m_voltageOutRequest = new VoltageOut(0.0);
     private final NeutralOut m_neutralOutRequest = new NeutralOut();
+
+    /* Debouncer and current detection */
+    private final Debouncer m_currentDebouncer = new Debouncer(IntakeConstants.kDebounceTime, DebounceType.kRising);
+    private boolean m_hasPieceByCurrent = false;
 
     /* Simulation only */
     private final DCMotorSim m_motorSim = new DCMotorSim(
@@ -57,8 +63,17 @@ public class Intake extends SubsystemBase {
         m_motor.setControl(m_neutralOutRequest);
     }
 
-    public boolean hasPiece() {
+    /* Game piece detection */
+    public boolean hasPieceByBeamBreak() {
         return !m_beamBreak.get();
+    }
+
+    public boolean hasPieceByCurrent() {
+        return m_hasPieceByCurrent;
+    }
+
+    public boolean hasPieceAny() {
+        return hasPieceByBeamBreak() || hasPieceByCurrent();
     }
 
     /** The Intake Command */
@@ -67,11 +82,19 @@ public class Intake extends SubsystemBase {
     }
 
     /** Run intake until beam stops */
-    public Command intakeUntilDetected() {
+    public Command intakeUntilDetectedByBeamBreak() {
         return run(() -> setVoltageOut(Volts.of(8.0)))
-                .until(this::hasPiece)
+                .until(this::hasPieceByBeamBreak)
                 .finallyDo(this::stop)
-                .withName("IntakeUntilDetected");
+                .withName("IntakeUntilDetectedByBeamBreak");
+    }
+
+    /** Run intake until current triggers debounce */
+    public Command intakeUntilDetectedByCurrent() {
+        return run(() -> setVoltageOut(Volts.of(8.0)))
+                .until(this::hasPieceByCurrent)
+                .finallyDo(this::stop)
+                .withName("IntakeUntilDetectedByCurrent");
     }
 
     /** Eject for a fixed time, then stop. */
@@ -83,9 +106,12 @@ public class Intake extends SubsystemBase {
 
     @Override
     public void periodic() {
+        double statorCurrent = m_motor.getStatorCurrent().getValueAsDouble();
+        m_hasPieceByCurrent = m_currentDebouncer.calculate(statorCurrent > IntakeConstants.kStallCurrentThreshold);
+
         // State
-        SmartDashboard.putBoolean("Intake/HasPiece", hasPiece());
-        SmartDashboard.putBoolean("Intake/BeamBreakRaw", m_beamBreak.get());
+        SmartDashboard.putBoolean("Intake/HasPieceByCurrent", m_hasPieceByCurrent);
+        SmartDashboard.putBoolean("Intake/HasPieceByBeamBreak", hasPieceByBeamBreak());
 
         // Motor electrical
         SmartDashboard.putNumber("Intake/MotorOutput", m_motor.get());
