@@ -55,9 +55,6 @@ public class RobotContainer {
         m_driver.button(1).whileTrue(m_intake.runIntakeCommand());
         m_driver.button(2).onTrue(m_intake.intakeUntilDetected());
         m_driver.button(3).onTrue(m_intake.ejectCommand());
-
-        new Trigger(m_intake::hasPiece)
-                .onTrue(Commands.print("Game piece acquired!"));
     }
 
     /**
